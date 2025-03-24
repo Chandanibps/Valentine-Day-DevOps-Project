@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    environment {
+        SCANNER_HOME = tool 'sonar'
+    }
+
+    stages {
+        stage('git checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Chandanibps/Valentine-Day-DevOps-Project.git'
+            }
+        }
+        stage('trivy Fs scan') {
+            steps {
+                sh "trivy fs . --format table -o trivy-fs-report.html"
+            }
+        }
+        
+        stage('sonar qube') {
+            steps {
+                withSonarQubeEnv('sonar') {
+                    sh """
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=valen \
+                        -Dsonar.projectKey=valen
+                    """
+                }
+            }
+        }
+        stage('Build and tag ') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'dockerhub', toolName: 'docker') {
+                        sh 'docker build -t chandanibps/valen:latest .'
+                    }
+                }
+            }
+        }
+        stage('trivy file scan') {
+            steps {
+                sh "trivy image chandanibps/valen:latest"
+            }
+        }
+        stage('docker push') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'dockerhub', toolName: 'docker') {
+                        sh 'docker push chandanibps/valen:latest'
+                    }
+                }
+            }
+        }
+        stage('deploy') {
+            steps {
+                script {
+                    sh 'docker run -d -p 8081:80 chandanibps/valen:latest'
+                }
+            }
+        }
+    }
+}
